@@ -27,7 +27,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Generate App Version
         run: echo APP_VERSION=`grep -o 'Version = "[^"]*"' ./app/version.go | cut -d'"' -f2` >> $GITHUB_ENV
-      - name: Build and push
+      - name: Build 和 push
         uses: docker/build-push-action@v6
         with:
           context: .

@@ -15,11 +15,7 @@ func epaySubmit(ctx *gin.Context) {
 	var rawParams = ctx.Request.URL.Query()
 	if ctx.Request.Method == http.MethodPost {
 		if err := ctx.Request.ParseForm(); err != nil {
-			ctx.JSON(200, gin.H{
-				"return_code": "FAIL",
-				"return_msg":  "参数解析错误：" + err.Error(),
-				"result_code": "FAIL",
-			})
+			ctx.String(200, "参数解析错误："+err.Error())
 			return
 		}
 
@@ -36,20 +32,12 @@ func epaySubmit(ctx *gin.Context) {
 	}
 
 	if data["pid"] != epay.Pid {
-		ctx.JSON(200, gin.H{
-			"return_code": "FAIL",
-			"return_msg":  "Bepusdt 易支付兼容模式，商户号【PID】必须固定为" + epay.Pid,
-			"result_code": "FAIL",
-		})
+		ctx.String(200, "Bepusdt 易支付兼容模式，商户号【PID】必须固定为"+epay.Pid)
 		return
 	}
 
 	if epay.Sign(data, config.GetAuthToken()) != data["sign"] {
-		ctx.JSON(200, gin.H{
-			"return_code": "FAIL",
-			"return_msg":  "签名错误",
-			"result_code": "FAIL",
-		})
+		ctx.String(200, "签名错误")
 		return
 	}
 
@@ -60,11 +48,7 @@ func epaySubmit(ctx *gin.Context) {
 
 	var order, err = buildOrder(cast.ToFloat64(data["money"]), model.OrderApiTypeEpay, data["out_trade_no"], tradeType, data["return_url"], data["notify_url"], data["name"])
 	if err != nil {
-		ctx.JSON(200, gin.H{
-			"return_code": "FAIL",
-			"return_msg":  fmt.Sprintf("订单创建失败：%v", err),
-			"result_code": "FAIL",
-		})
+		ctx.String(200, fmt.Sprintf("订单创建失败：%v", err))
 		return
 	}
 
@@ -74,13 +58,21 @@ func epaySubmit(ctx *gin.Context) {
 		host = "https://" + ctx.Request.Host
 	}
 
-	// 返回符合萌次元商城要求的响应格式
-	ctx.JSON(200, gin.H{
-		"return_code": "SUCCESS",
-		"return_msg":  "",
-		"result_code": "SUCCESS",
-		"pay_amount":  int64(order.Money * 100), // 转换为分
-		"pay_url":    fmt.Sprintf("%s/pay/checkout-counter/%s", config.GetAppUri(host), order.TradeId),
-		"pay_id":     order.TradeId,
-	})
+	// 检查是否是 API 请求
+	isApiRequest := data["is_api"] == "1"
+
+	if isApiRequest {
+		// API 模式返回 JSON 响应
+		ctx.JSON(200, gin.H{
+			"return_code": "SUCCESS",
+			"return_msg":  "",
+			"result_code": "SUCCESS",
+			"pay_amount":  int64(order.Money * 100), // 转换为分
+			"pay_url":    fmt.Sprintf("%s/pay/checkout-counter/%s", config.GetAppUri(host), order.TradeId),
+			"pay_id":     order.TradeId,
+		})
+	} else {
+		// 普通模式直接跳转到支付页面
+		ctx.Redirect(http.StatusFound, fmt.Sprintf("%s/pay/checkout-counter/%s", config.GetAppUri(host), order.TradeId))
+	}
 }

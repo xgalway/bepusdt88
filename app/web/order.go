@@ -184,8 +184,11 @@ func checkStatus(ctx *gin.Context) {
 	var tradeId = ctx.Param("trade_id")
 	var order, ok = model.GetTradeOrder(tradeId)
 	if !ok {
-		ctx.JSON(200, respFailJson("订单不存在"))
-
+		ctx.JSON(200, gin.H{
+			"return_code": "FAIL",
+			"return_msg":  "订单不存在",
+			"result_code": "FAIL",
+		})
 		return
 	}
 
@@ -198,6 +201,13 @@ func checkStatus(ctx *gin.Context) {
 		}
 	}
 
-	// 返回响应数据
-	ctx.JSON(200, gin.H{"trade_id": tradeId, "status": order.Status, "return_url": returnUrl})
+	// 返回符合萌次元商城要求的响应格式
+	ctx.JSON(200, gin.H{
+		"return_code": "SUCCESS",
+		"return_msg":  "",
+		"result_code": "SUCCESS",
+		"status":      order.Status,
+		"pay_amount":  int64(order.Money * 100), // 转换为分
+		"return_url":  returnUrl,
+	})
 }

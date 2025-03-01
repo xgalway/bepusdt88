@@ -31,7 +31,6 @@ func epay(order model.TradeOrders) {
 	postReq, err2 := http.NewRequest("GET", notifyUrl, nil)
 	if err2 != nil {
 		log.Error("Notify NewRequest Error：", err2)
-
 		return
 	}
 
@@ -39,29 +38,38 @@ func epay(order model.TradeOrders) {
 	resp, err := client.Do(postReq)
 	if err != nil {
 		log.Error("Notify Handle Error：", err)
-
 		return
 	}
 
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		log.Warn(fmt.Sprintf("订单回调失败(%v)：resp.StatusCode != 200", order.OrderId), order.OrderSetNotifyState(model.OrderNotifyStateFail))
-
 		return
 	}
 
 	all, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Warn(fmt.Sprintf("订单回调失败(%v)：io.ReadAll(resp.Body) Error:", order.OrderId), err, order.OrderSetNotifyState(model.OrderNotifyStateFail))
-
 		return
 	}
 
-	// 判断是否包含 success
-	if !strings.Contains(strings.ToLower(string(all)), "success") {
-		log.Warn(fmt.Sprintf("订单回调失败(%v)：body not contains success (%s)", order.OrderId, string(all)), err, order.OrderSetNotifyState(model.OrderNotifyStateFail))
-
-		return
+	// 解析响应
+	var response struct {
+		ReturnCode string `json:"return_code"`
+		ResultCode string `json:"result_code"`
+	}
+	if err := json.Unmarshal(all, &response); err != nil {
+		// 如果不是JSON格式，检查是否包含success（兼容旧版本）
+		if !strings.Contains(strings.ToLower(string(all)), "success") {
+			log.Warn(fmt.Sprintf("订单回调失败(%v)：响应不符合要求 (%s)", order.OrderId, string(all)), err, order.OrderSetNotifyState(model.OrderNotifyStateFail))
+			return
+		}
+	} else {
+		// 检查JSON响应是否符合要求
+		if response.ReturnCode != "SUCCESS" || response.ResultCode != "SUCCESS" {
+			log.Warn(fmt.Sprintf("订单回调失败(%v)：响应状态码错误 (%s)", order.OrderId, string(all)), err, order.OrderSetNotifyState(model.OrderNotifyStateFail))
+			return
+		}
 	}
 
 	err = order.OrderSetNotifyState(model.OrderNotifyStateSucc)
